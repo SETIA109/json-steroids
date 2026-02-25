@@ -6,8 +6,8 @@
 use crate::error::Result;
 use crate::parser::{JsonParser, ParseInt};
 use crate::writer::JsonWriter;
-use std::collections::{HashMap, BTreeMap};
 use std::borrow::Cow;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 
 /// Trait for types that can be serialized to JSON

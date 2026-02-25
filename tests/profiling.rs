@@ -12,8 +12,8 @@
 //!   cargo flamegraph --test profiling --test-name prof_serialize_complex -- --nocapture
 
 use json_steroids::{
-    from_str, from_bytes, parse, to_string, to_string_pretty,
-    Json, JsonDeserialize, JsonSerialize, JsonValue, JsonWriter,
+    from_bytes, from_str, parse, to_string, to_string_pretty, Json, JsonDeserialize, JsonSerialize,
+    JsonValue, JsonWriter,
 };
 use std::collections::BTreeMap;
 use std::hint::black_box;
@@ -93,7 +93,11 @@ enum Event {
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn make_simple() -> SimpleStruct {
-    SimpleStruct { name: "json-steroids".to_string(), value: 42, active: true }
+    SimpleStruct {
+        name: "json-steroids".to_string(),
+        value: 42,
+        active: true,
+    }
 }
 
 fn make_complex() -> ComplexStruct {
@@ -163,7 +167,10 @@ fn prof_serialize_complex() {
         result = to_string(black_box(&data));
     }
     assert!(!result.is_empty());
-    eprintln!("[prof_serialize_complex] last output length: {}", result.len());
+    eprintln!(
+        "[prof_serialize_complex] last output length: {}",
+        result.len()
+    );
 }
 
 /// Hot path: struct with 15 fields of mixed types.
@@ -531,9 +538,7 @@ fn prof_roundtrip_floats() {
 /// Hot path: round-trip extreme integer values.
 #[test]
 fn prof_roundtrip_integer_extremes() {
-    let data: Vec<i64> = vec![
-        i64::MIN, i64::MIN / 2, -1, 0, 1, i64::MAX / 2, i64::MAX,
-    ];
+    let data: Vec<i64> = vec![i64::MIN, i64::MIN / 2, -1, 0, 1, i64::MAX / 2, i64::MAX];
     for _ in 0..ITERS {
         let json = to_string(black_box(&data));
         let rt = from_str::<Vec<i64>>(black_box(&json)).unwrap();
@@ -570,7 +575,9 @@ fn prof_stress_large_plain_string() {
 /// Stress: alternating-escape string (every other char is `\n`).
 #[test]
 fn prof_stress_large_escape_string() {
-    let s: String = (0..5_000).map(|i| if i % 2 == 0 { 'x' } else { '\n' }).collect();
+    let s: String = (0..5_000)
+        .map(|i| if i % 2 == 0 { 'x' } else { '\n' })
+        .collect();
     for _ in 0..100 {
         let json = to_string(black_box(&s));
         let rt = from_str::<String>(black_box(&json)).unwrap();
@@ -610,4 +617,3 @@ fn prof_stress_realistic_api_payload() {
     }
     assert_eq!(count, 5);
 }
-

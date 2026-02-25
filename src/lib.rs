@@ -27,18 +27,18 @@
 
 mod error;
 mod parser;
-mod writer;
-mod value;
 mod traits;
+mod value;
+mod writer;
 
 pub use error::{JsonError, Result};
 pub use parser::JsonParser;
-pub use writer::JsonWriter;
+pub use traits::{JsonDeserialize, JsonSerialize};
 pub use value::JsonValue;
-pub use traits::{JsonSerialize, JsonDeserialize};
+pub use writer::JsonWriter;
 
 // Re-export derive macros
-pub use json_steroids_derive::{Json, JsonSerialize, JsonDeserialize};
+pub use json_steroids_derive::{Json, JsonDeserialize, JsonSerialize};
 
 /// Serialize a value to a JSON string
 #[inline]

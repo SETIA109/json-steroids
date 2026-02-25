@@ -4,20 +4,20 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, format_ident};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Type, Ident};
 use proc_macro_crate::{crate_name, FoundCrate};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Type};
 
 /// Get the crate path - correctly resolves whether we are inside
 /// the `json_steroids` crate itself or an external consumer.
 fn crate_path() -> TokenStream2 {
     match crate_name("json-steroids") {
-        Ok(FoundCrate::Itself) => quote! { ::json_steroids },
+        Ok(FoundCrate::Itself) => quote! { crate },
         Ok(FoundCrate::Name(name)) => {
             let ident = proc_macro2::Ident::new(&name, proc_macro2::Span::call_site());
             quote! { ::#ident }
         }
-        // Fallback: we are inside the crate being compiled (unit tests)
+        // Fallback: we are inside the crate being compiled (unit tests, benchmarks)
         Err(_) => quote! { crate },
     }
 }
@@ -144,19 +144,22 @@ fn generate_serialize_body(data: &Data, _name: &Ident, krate: &TokenStream2) -> 
                     }
                 }
                 Fields::Unnamed(fields) => {
-                    let field_serializations: Vec<TokenStream2> = (0..fields.unnamed.len()).enumerate().map(|(i, idx)| {
-                        let index = syn::Index::from(idx);
-                        if i == 0 {
-                            quote! {
-                                #krate::JsonSerialize::json_serialize(&self.#index, writer);
+                    let field_serializations: Vec<TokenStream2> = (0..fields.unnamed.len())
+                        .enumerate()
+                        .map(|(i, idx)| {
+                            let index = syn::Index::from(idx);
+                            if i == 0 {
+                                quote! {
+                                    #krate::JsonSerialize::json_serialize(&self.#index, writer);
+                                }
+                            } else {
+                                quote! {
+                                    writer.write_comma();
+                                    #krate::JsonSerialize::json_serialize(&self.#index, writer);
+                                }
                             }
-                        } else {
-                            quote! {
-                                writer.write_comma();
-                                #krate::JsonSerialize::json_serialize(&self.#index, writer);
-                            }
-                        }
-                    }).collect();
+                        })
+                        .collect();
 
                     quote! {
                         writer.begin_array();
@@ -256,15 +259,18 @@ fn generate_serialize_body(data: &Data, _name: &Ident, krate: &TokenStream2) -> 
 
 fn generate_deserialize_body(data: &Data, name: &Ident, krate: &TokenStream2) -> TokenStream2 {
     match data {
-        Data::Struct(data_struct) => {
-            match &data_struct.fields {
-                Fields::Named(fields) => {
-                    let field_declarations: Vec<TokenStream2> = fields.named.iter().map(|f| {
+        Data::Struct(data_struct) => match &data_struct.fields {
+            Fields::Named(fields) => {
+                let field_declarations: Vec<TokenStream2> = fields
+                    .named
+                    .iter()
+                    .map(|f| {
                         let field_name = f.ident.as_ref().unwrap();
                         quote! { let mut #field_name = None; }
-                    }).collect();
+                    })
+                    .collect();
 
-                    let field_matches: Vec<TokenStream2> = fields.named.iter().map(|f| {
+                let field_matches: Vec<TokenStream2> = fields.named.iter().map(|f| {
                         let field_name = f.ident.as_ref().unwrap();
                         let field_name_str = get_field_name(&f.attrs, field_name);
                         quote! {
@@ -274,7 +280,7 @@ fn generate_deserialize_body(data: &Data, name: &Ident, krate: &TokenStream2) ->
                         }
                     }).collect();
 
-                    let field_unwraps: Vec<TokenStream2> = fields.named.iter().map(|f| {
+                let field_unwraps: Vec<TokenStream2> = fields.named.iter().map(|f| {
                         let field_name = f.ident.as_ref().unwrap();
                         let field_name_str = field_name.to_string();
                         let is_option = is_option_type(&f.ty);
@@ -290,33 +296,35 @@ fn generate_deserialize_body(data: &Data, name: &Ident, krate: &TokenStream2) ->
                         }
                     }).collect();
 
-                    quote! {
-                        parser.expect_object_start()?;
-                        #(#field_declarations)*
+                quote! {
+                    parser.expect_object_start()?;
+                    #(#field_declarations)*
 
-                        loop {
-                            match parser.next_object_key()? {
-                                Some(key) => {
-                                    match key.as_ref() {
-                                        #(#field_matches)*
-                                        _ => {
-                                            parser.skip_value()?;
-                                        }
+                    loop {
+                        match parser.next_object_key()? {
+                            Some(key) => {
+                                match key.as_ref() {
+                                    #(#field_matches)*
+                                    _ => {
+                                        parser.skip_value()?;
                                     }
                                 }
-                                None => break,
                             }
+                            None => break,
                         }
-
-                        parser.expect_object_end()?;
-
-                        Ok(#name {
-                            #(#field_unwraps),*
-                        })
                     }
+
+                    parser.expect_object_end()?;
+
+                    Ok(#name {
+                        #(#field_unwraps),*
+                    })
                 }
-                Fields::Unnamed(fields) => {
-                    let field_deserializations: Vec<TokenStream2> = (0..fields.unnamed.len()).enumerate().map(|(i, _)| {
+            }
+            Fields::Unnamed(fields) => {
+                let field_deserializations: Vec<TokenStream2> = (0..fields.unnamed.len())
+                    .enumerate()
+                    .map(|(i, _)| {
                         if i == 0 {
                             quote! { #krate::JsonDeserialize::json_deserialize(parser)? }
                         } else {
@@ -327,23 +335,23 @@ fn generate_deserialize_body(data: &Data, name: &Ident, krate: &TokenStream2) ->
                                 }
                             }
                         }
-                    }).collect();
+                    })
+                    .collect();
 
-                    quote! {
-                        parser.expect_array_start()?;
-                        let result = #name(#(#field_deserializations),*);
-                        parser.expect_array_end()?;
-                        Ok(result)
-                    }
-                }
-                Fields::Unit => {
-                    quote! {
-                        parser.expect_null()?;
-                        Ok(#name)
-                    }
+                quote! {
+                    parser.expect_array_start()?;
+                    let result = #name(#(#field_deserializations),*);
+                    parser.expect_array_end()?;
+                    Ok(result)
                 }
             }
-        }
+            Fields::Unit => {
+                quote! {
+                    parser.expect_null()?;
+                    Ok(#name)
+                }
+            }
+        },
         Data::Enum(data_enum) => {
             let variant_matches: Vec<TokenStream2> = data_enum.variants.iter().map(|variant| {
                 let variant_name = &variant.ident;

@@ -13,7 +13,9 @@ static NEEDS_ESCAPE: [bool; 256] = {
     // Control characters 0x00-0x1F
     loop {
         table[i as usize] = true;
-        if i == 0x1F { break; }
+        if i == 0x1F {
+            break;
+        }
         i += 1;
     }
     table[b'"' as usize] = true;
@@ -181,13 +183,13 @@ impl JsonWriter {
                     self.buffer.extend_from_slice(&bytes[start..i]);
                 }
                 match byte {
-                    b'"'  => self.buffer.extend_from_slice(b"\\\""),
+                    b'"' => self.buffer.extend_from_slice(b"\\\""),
                     b'\\' => self.buffer.extend_from_slice(b"\\\\"),
                     b'\n' => self.buffer.extend_from_slice(b"\\n"),
                     b'\r' => self.buffer.extend_from_slice(b"\\r"),
                     b'\t' => self.buffer.extend_from_slice(b"\\t"),
-                    0x08  => self.buffer.extend_from_slice(b"\\b"),
-                    0x0C  => self.buffer.extend_from_slice(b"\\f"),
+                    0x08 => self.buffer.extend_from_slice(b"\\b"),
+                    0x0C => self.buffer.extend_from_slice(b"\\f"),
                     _ => {
                         // Other control characters as \u00XX
                         self.buffer.extend_from_slice(b"\\u00");
@@ -235,7 +237,8 @@ impl JsonWriter {
     pub fn write_i64(&mut self, value: i64) {
         self.write_indent();
         let mut buffer = itoa::Buffer::new();
-        self.buffer.extend_from_slice(buffer.format(value).as_bytes());
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
     }
 
     /// Write an unsigned integer
@@ -243,7 +246,8 @@ impl JsonWriter {
     pub fn write_u64(&mut self, value: u64) {
         self.write_indent();
         let mut buffer = itoa::Buffer::new();
-        self.buffer.extend_from_slice(buffer.format(value).as_bytes());
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
     }
 
     /// Write a float
@@ -251,7 +255,8 @@ impl JsonWriter {
     pub fn write_f64(&mut self, value: f64) {
         self.write_indent();
         let mut buffer = ryu::Buffer::new();
-        self.buffer.extend_from_slice(buffer.format(value).as_bytes());
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
     }
 }
 

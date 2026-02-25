@@ -161,9 +161,7 @@ impl JsonValue {
     #[inline]
     pub fn get(&self, key: &str) -> Option<&JsonValue> {
         match self {
-            JsonValue::Object(obj) => {
-                obj.iter().find(|(k, _)| k == key).map(|(_, v)| v)
-            }
+            JsonValue::Object(obj) => obj.iter().find(|(k, _)| k == key).map(|(_, v)| v),
             _ => None,
         }
     }
@@ -181,9 +179,7 @@ impl JsonValue {
     #[inline]
     pub fn get_mut(&mut self, key: &str) -> Option<&mut JsonValue> {
         match self {
-            JsonValue::Object(obj) => {
-                obj.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
-            }
+            JsonValue::Object(obj) => obj.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v),
             _ => None,
         }
     }
@@ -358,4 +354,3 @@ mod tests {
         assert!(arr[10].is_null());
     }
 }
-

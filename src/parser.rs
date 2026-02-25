@@ -168,7 +168,9 @@ impl<'a> JsonParser<'a> {
         let byte = self.peek().ok_or(JsonError::UnexpectedEnd)?;
 
         match byte {
-            b'"' => self.parse_string().map(|s| JsonValue::String(s.into_owned())),
+            b'"' => self
+                .parse_string()
+                .map(|s| JsonValue::String(s.into_owned())),
             b'{' => self.parse_object_value(),
             b'[' => self.parse_array_value(),
             b't' => self.parse_true().map(|_| JsonValue::Bool(true)),
@@ -180,7 +182,7 @@ impl<'a> JsonParser<'a> {
     }
 
     /// Parse a string, returning a Cow to avoid allocation when possible
-    pub  fn parse_string(&mut self) -> Result<Cow<'a, str>> {
+    pub fn parse_string(&mut self) -> Result<Cow<'a, str>> {
         self.skip_whitespace();
 
         if self.peek() != Some(b'"') {
@@ -194,7 +196,8 @@ impl<'a> JsonParser<'a> {
         unsafe {
             // Fast path: scan for end quote or escape
             while self.pos < self.len {
-                match self.input.get_unchecked(self.pos) { // bounds check once per loop
+                match self.input.get_unchecked(self.pos) {
+                    // bounds check once per loop
                     b'"' => {
                         if has_escapes {
                             // Need to process escapes
@@ -203,7 +206,9 @@ impl<'a> JsonParser<'a> {
                             return self.unescape_string(raw);
                         } else {
                             // Zero-copy path: no escapes found
-                            let s = std::str::from_utf8_unchecked(&self.input.get_unchecked(start..self.pos));
+                            let s = std::str::from_utf8_unchecked(
+                                &self.input.get_unchecked(start..self.pos),
+                            );
                             self.advance(); // consume closing quote
                             return Ok(Cow::Borrowed(s));
                         }
@@ -259,7 +264,8 @@ impl<'a> JsonParser<'a> {
                                         + (low_code_point as u32 - 0xDC00);
                                     if let Some(c) = char::from_u32(combined) {
                                         let mut buf = [0u8; 4];
-                                        result.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+                                        result
+                                            .extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
                                     }
                                     // From position of 'u':
                                     //   4 hex of first code unit  = 4
@@ -358,9 +364,7 @@ impl<'a> JsonParser<'a> {
             }
         }
 
-        let num_str = unsafe {
-            std::str::from_utf8_unchecked(&self.input[start..self.pos])
-        };
+        let num_str = unsafe { std::str::from_utf8_unchecked(&self.input[start..self.pos]) };
 
         if is_float {
             num_str
@@ -705,56 +709,97 @@ impl<'a> JsonParser<'a> {
                 self.pos += 1; // consume opening quote
                 while self.pos < self.len {
                     match self.input.get_unchecked(self.pos) {
-                        b'"' => { self.pos += 1; return Ok(()); }
-                        b'\\' => { self.pos += 2; } // skip escape pair
-                        _ => { self.pos += 1; }
+                        b'"' => {
+                            self.pos += 1;
+                            return Ok(());
+                        }
+                        b'\\' => {
+                            self.pos += 2;
+                        } // skip escape pair
+                        _ => {
+                            self.pos += 1;
+                        }
                     }
                 }
 
                 Err(JsonError::UnexpectedEnd)
-            }
+            },
             Some(b'{') => unsafe {
                 self.pos += 1;
                 let mut depth = 1usize;
                 while self.pos < self.len {
                     // bounds check once per loop
-                    match  self.input.get_unchecked(self.pos)  {
-                        b'"' => { self.pos += 1; self.skip_string_body()?; }
-                        b'{' | b'[' => { depth += 1; self.pos += 1; }
+                    match self.input.get_unchecked(self.pos) {
+                        b'"' => {
+                            self.pos += 1;
+                            self.skip_string_body()?;
+                        }
+                        b'{' | b'[' => {
+                            depth += 1;
+                            self.pos += 1;
+                        }
                         b'}' | b']' => {
                             self.pos += 1;
                             depth -= 1;
-                            if depth == 0 { return Ok(()); }
+                            if depth == 0 {
+                                return Ok(());
+                            }
                         }
-                        _ => { self.pos += 1; }
+                        _ => {
+                            self.pos += 1;
+                        }
                     }
                 }
                 Err(JsonError::UnexpectedEnd)
-            }
+            },
             Some(b'[') => unsafe {
                 self.pos += 1;
                 let mut depth = 1usize;
                 while self.pos < self.len {
                     match self.input.get_unchecked(self.pos) {
-                        b'"' => { self.pos += 1; self.skip_string_body()?; }
-                        b'{' | b'[' => { depth += 1; self.pos += 1; }
+                        b'"' => {
+                            self.pos += 1;
+                            self.skip_string_body()?;
+                        }
+                        b'{' | b'[' => {
+                            depth += 1;
+                            self.pos += 1;
+                        }
                         b'}' | b']' => {
                             self.pos += 1;
                             depth -= 1;
-                            if depth == 0 { return Ok(()); }
+                            if depth == 0 {
+                                return Ok(());
+                            }
                         }
-                        _ => { self.pos += 1; }
+                        _ => {
+                            self.pos += 1;
+                        }
                     }
                 }
                 Err(JsonError::UnexpectedEnd)
-            }
-            Some(b't') => { self.pos += 4; Ok(()) } // "true"
-            Some(b'f') => { self.pos += 5; Ok(()) } // "false"
-            Some(b'n') => { self.pos += 4; Ok(()) } // "null"
+            },
+            Some(b't') => {
+                self.pos += 4;
+                Ok(())
+            } // "true"
+            Some(b'f') => {
+                self.pos += 5;
+                Ok(())
+            } // "false"
+            Some(b'n') => {
+                self.pos += 4;
+                Ok(())
+            } // "null"
             Some(b'-') | Some(b'0'..=b'9') => {
                 // Skip past all number characters
-                if self.input.get(self.pos) == Some(&b'-') { self.pos += 1; }
-                while matches!(self.input.get(self.pos), Some(b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')) {
+                if self.input.get(self.pos) == Some(&b'-') {
+                    self.pos += 1;
+                }
+                while matches!(
+                    self.input.get(self.pos),
+                    Some(b'0'..=b'9' | b'.' | b'e' | b'E' | b'+' | b'-')
+                ) {
                     self.pos += 1;
                 }
                 Ok(())
@@ -769,9 +814,16 @@ impl<'a> JsonParser<'a> {
     fn skip_string_body(&mut self) -> Result<()> {
         loop {
             match self.input.get(self.pos) {
-                Some(b'"') => { self.pos += 1; return Ok(()); }
-                Some(b'\\') => { self.pos += 2; }
-                Some(_) => { self.pos += 1; }
+                Some(b'"') => {
+                    self.pos += 1;
+                    return Ok(());
+                }
+                Some(b'\\') => {
+                    self.pos += 2;
+                }
+                Some(_) => {
+                    self.pos += 1;
+                }
                 None => return Err(JsonError::UnexpectedEnd),
             }
         }
@@ -850,4 +902,3 @@ mod tests {
         assert!(value.is_object());
     }
 }
-

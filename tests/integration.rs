@@ -16,8 +16,8 @@
 //! - Large payload correctness
 
 use json_steroids::{
-    from_bytes, from_str, parse, to_string, to_string_pretty, Json, JsonDeserialize,
-    JsonSerialize, JsonValue, JsonWriter,
+    from_bytes, from_str, parse, to_string, to_string_pretty, Json, JsonDeserialize, JsonSerialize,
+    JsonValue, JsonWriter,
 };
 use std::collections::{BTreeMap, HashMap};
 
@@ -375,7 +375,10 @@ fn hashmap_roundtrip() {
 
 #[test]
 fn simple_struct_roundtrip() {
-    let original = Person { name: "Alice".to_string(), age: 30 };
+    let original = Person {
+        name: "Alice".to_string(),
+        age: 30,
+    };
     assert_eq!(from_str::<Person>(&to_string(&original)).unwrap(), original);
 }
 
@@ -402,7 +405,10 @@ fn struct_with_option_none() {
 #[test]
 fn nested_struct_roundtrip() {
     let e = Employee {
-        person: Person { name: "Bob".to_string(), age: 25 },
+        person: Person {
+            name: "Bob".to_string(),
+            age: 25,
+        },
         address: Address {
             street: "42 Elm St".to_string(),
             city: "Shelbyville".to_string(),
@@ -472,7 +478,10 @@ fn tuple_enum_roundtrip() {
 
 #[test]
 fn struct_enum_roundtrip() {
-    let v = Shape::Rectangle { width: 10.0, height: 4.5 };
+    let v = Shape::Rectangle {
+        width: 10.0,
+        height: 4.5,
+    };
     let rt: Shape = from_str(&to_string(&v)).unwrap();
     assert_eq!(rt, v);
 }
@@ -542,7 +551,10 @@ fn dynamic_nested() {
     let json = r#"{"users":[{"name":"Alice","age":30},{"name":"Bob","age":25}]}"#;
     let v = parse(json).unwrap();
     assert!(v["users"].is_array());
-    assert_eq!(v["users"][0]["name"], JsonValue::String("Alice".to_string()));
+    assert_eq!(
+        v["users"][0]["name"],
+        JsonValue::String("Alice".to_string())
+    );
     assert_eq!(v["users"][1]["age"], JsonValue::Integer(25));
 }
 
@@ -561,7 +573,10 @@ fn dynamic_serialize_roundtrip() {
 
 #[test]
 fn pretty_print_contains_newlines() {
-    let p = Person { name: "Alice".to_string(), age: 30 };
+    let p = Person {
+        name: "Alice".to_string(),
+        age: 30,
+    };
     let pretty = to_string_pretty(&p);
     assert!(pretty.contains('\n'));
     assert!(pretty.contains("  ")); // indentation
@@ -569,7 +584,10 @@ fn pretty_print_contains_newlines() {
 
 #[test]
 fn pretty_print_still_valid() {
-    let p = Person { name: "Alice".to_string(), age: 30 };
+    let p = Person {
+        name: "Alice".to_string(),
+        age: 30,
+    };
     let pretty = to_string_pretty(&p);
     let rt: Person = from_str(&pretty).unwrap();
     assert_eq!(rt, p);
@@ -583,7 +601,13 @@ fn pretty_print_still_valid() {
 fn from_bytes_basic() {
     let bytes = br#"{"name":"Alice","age":30}"#;
     let p: Person = from_bytes(bytes).unwrap();
-    assert_eq!(p, Person { name: "Alice".to_string(), age: 30 });
+    assert_eq!(
+        p,
+        Person {
+            name: "Alice".to_string(),
+            age: 30
+        }
+    );
 }
 
 #[test]
@@ -649,7 +673,13 @@ fn writer_nested_array_in_object() {
 fn whitespace_around_values() {
     let json = "  {  \"name\"  :  \"Alice\"  ,  \"age\"  :  30  }  ";
     let p: Person = from_str(json).unwrap();
-    assert_eq!(p, Person { name: "Alice".to_string(), age: 30 });
+    assert_eq!(
+        p,
+        Person {
+            name: "Alice".to_string(),
+            age: 30
+        }
+    );
 }
 
 #[test]
@@ -667,21 +697,39 @@ fn whitespace_in_array() {
 fn skip_unknown_string_field() {
     let json = r#"{"name":"Alice","unknown_key":"some value","age":30}"#;
     let p: Person = from_str(json).unwrap();
-    assert_eq!(p, Person { name: "Alice".to_string(), age: 30 });
+    assert_eq!(
+        p,
+        Person {
+            name: "Alice".to_string(),
+            age: 30
+        }
+    );
 }
 
 #[test]
 fn skip_unknown_object_field() {
     let json = r#"{"name":"Alice","extra":{"a":1,"b":[2,3]},"age":30}"#;
     let p: Person = from_str(json).unwrap();
-    assert_eq!(p, Person { name: "Alice".to_string(), age: 30 });
+    assert_eq!(
+        p,
+        Person {
+            name: "Alice".to_string(),
+            age: 30
+        }
+    );
 }
 
 #[test]
 fn skip_unknown_array_field() {
     let json = r#"{"name":"Alice","nums":[1,2,3],"age":30}"#;
     let p: Person = from_str(json).unwrap();
-    assert_eq!(p, Person { name: "Alice".to_string(), age: 30 });
+    assert_eq!(
+        p,
+        Person {
+            name: "Alice".to_string(),
+            age: 30
+        }
+    );
 }
 
 // ─────────────────────────────────────────────
@@ -750,7 +798,9 @@ fn large_string_no_escapes() {
 #[test]
 fn large_string_with_escapes() {
     // Every other character is a newline
-    let v: String = (0..1000).map(|i| if i % 2 == 0 { 'x' } else { '\n' }).collect();
+    let v: String = (0..1000)
+        .map(|i| if i % 2 == 0 { 'x' } else { '\n' })
+        .collect();
     assert_eq!(from_str::<String>(&to_string(&v)).unwrap(), v);
 }
 

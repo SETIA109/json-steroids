@@ -1,8 +1,8 @@
 //! Benchmarks for json-steroids comparing with serde_json
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput, BenchmarkId};
-use json_steroids::{Json, from_str, to_string, parse, JsonSerialize, JsonDeserialize, JsonWriter, JsonParser, JsonError, Result};
-use serde::{Serialize, Deserialize};
+use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
+use json_steroids::{from_str, parse, to_string, Json};
+use serde::{Deserialize, Serialize};
 
 // ============ json-steroids types ============
 
@@ -197,9 +197,7 @@ fn bench_parse_dynamic_comparison(c: &mut Criterion) {
 
     let json = r#"{"name":"test","values":[1,2,3,4,5],"nested":{"a":true,"b":false}}"#;
 
-    group.bench_function("json-steroids", |b| {
-        b.iter(|| parse(black_box(json)))
-    });
+    group.bench_function("json-steroids", |b| b.iter(|| parse(black_box(json))));
 
     group.bench_function("serde_json", |b| {
         b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(json)))
@@ -215,9 +213,7 @@ fn bench_large_array_comparison(c: &mut Criterion) {
     let mut group = c.benchmark_group("large_array_serialize");
     group.throughput(Throughput::Elements(1000));
 
-    group.bench_function("json-steroids", |b| {
-        b.iter(|| to_string(black_box(&data)))
-    });
+    group.bench_function("json-steroids", |b| b.iter(|| to_string(black_box(&data))));
 
     group.bench_function("serde_json", |b| {
         b.iter(|| serde_json::to_string(black_box(&data)).unwrap())
@@ -288,9 +284,7 @@ fn bench_deeply_nested_comparison(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("deeply_nested_parse");
 
-    group.bench_function("json-steroids", |b| {
-        b.iter(|| parse(black_box(json)))
-    });
+    group.bench_function("json-steroids", |b| b.iter(|| parse(black_box(json))));
 
     group.bench_function("serde_json", |b| {
         b.iter(|| serde_json::from_str::<serde_json::Value>(black_box(json)))
