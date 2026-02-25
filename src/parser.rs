@@ -124,13 +124,6 @@ impl<'a> JsonParser<'a> {
         self.input.get(self.pos).copied()
     }
 
-    /// Peek at the current byte, skipping whitespace
-    #[inline]
-    fn peek_non_ws(&mut self) -> Option<u8> {
-        self.skip_whitespace();
-        self.peek()
-    }
-
     /// Advance by one byte
     #[inline]
     fn advance(&mut self) {
@@ -207,7 +200,7 @@ impl<'a> JsonParser<'a> {
                         } else {
                             // Zero-copy path: no escapes found
                             let s = std::str::from_utf8_unchecked(
-                                &self.input.get_unchecked(start..self.pos),
+                                self.input.get_unchecked(start..self.pos),
                             );
                             self.advance(); // consume closing quote
                             return Ok(Cow::Borrowed(s));

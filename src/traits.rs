@@ -5,7 +5,7 @@
 
 use crate::error::Result;
 use crate::parser::{JsonParser, ParseInt};
-use crate::writer::JsonWriter;
+use crate::writer::{JsonWriter, Writer};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
@@ -13,7 +13,7 @@ use std::hash::Hash;
 /// Trait for types that can be serialized to JSON
 pub trait JsonSerialize {
     /// Serialize this value to the given writer
-    fn json_serialize(&self, writer: &mut JsonWriter);
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>);
 }
 
 /// Trait for types that can be deserialized from JSON
@@ -26,7 +26,7 @@ pub trait JsonDeserialize: Sized {
 
 impl JsonSerialize for bool {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.write_bool(*self);
     }
 }
@@ -44,7 +44,7 @@ macro_rules! impl_json_signed {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
-                fn json_serialize(&self, writer: &mut JsonWriter) {
+                fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
                     writer.write_i64(*self as i64);
                 }
             }
@@ -68,7 +68,7 @@ macro_rules! impl_json_unsigned {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
-                fn json_serialize(&self, writer: &mut JsonWriter) {
+                fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
                     writer.write_u64(*self as u64);
                 }
             }
@@ -92,7 +92,7 @@ macro_rules! impl_json_float {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
-                fn json_serialize(&self, writer: &mut JsonWriter) {
+                fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
                     writer.write_f64(*self as f64);
                 }
             }
@@ -112,7 +112,7 @@ impl_json_float!(f32, f64);
 // String types
 impl JsonSerialize for String {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.write_string(self);
     }
 }
@@ -126,14 +126,14 @@ impl JsonDeserialize for String {
 
 impl JsonSerialize for str {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.write_string(self);
     }
 }
 
 impl<'a> JsonSerialize for Cow<'a, str> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.write_string(self);
     }
 }
@@ -148,7 +148,7 @@ impl<'a> JsonDeserialize for Cow<'a, str> {
 // Option
 impl<T: JsonSerialize> JsonSerialize for Option<T> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         match self {
             Some(value) => value.json_serialize(writer),
             None => writer.write_null(),
@@ -172,7 +172,7 @@ impl<T: JsonDeserialize> JsonDeserialize for Option<T> {
 // Vec
 impl<T: JsonSerialize> JsonSerialize for Vec<T> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
         for (i, item) in self.iter().enumerate() {
             if i > 0 {
@@ -208,7 +208,7 @@ impl<T: JsonDeserialize> JsonDeserialize for Vec<T> {
 // Slice (serialize only)
 impl<T: JsonSerialize> JsonSerialize for [T] {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
         for (i, item) in self.iter().enumerate() {
             if i > 0 {
@@ -223,7 +223,7 @@ impl<T: JsonSerialize> JsonSerialize for [T] {
 // Arrays
 impl<T: JsonSerialize, const N: usize> JsonSerialize for [T; N] {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
         for (i, item) in self.iter().enumerate() {
             if i > 0 {
@@ -238,7 +238,7 @@ impl<T: JsonSerialize, const N: usize> JsonSerialize for [T; N] {
 // HashMap
 impl<K: AsRef<str>, V: JsonSerialize> JsonSerialize for HashMap<K, V> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_object();
         for (i, (key, value)) in self.iter().enumerate() {
             if i > 0 {
@@ -260,14 +260,9 @@ where
         parser.expect_object_start()?;
         let mut result = HashMap::new();
 
-        loop {
-            match parser.next_object_key()? {
-                Some(key) => {
-                    let value = V::json_deserialize(parser)?;
-                    result.insert(K::from(key.into_owned()), value);
-                }
-                None => break,
-            }
+        while let Some(key) = parser.next_object_key()? {
+            let value = V::json_deserialize(parser)?;
+            result.insert(K::from(key.into_owned()), value);
         }
 
         Ok(result)
@@ -277,7 +272,7 @@ where
 // BTreeMap
 impl<K: AsRef<str>, V: JsonSerialize> JsonSerialize for BTreeMap<K, V> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_object();
         for (i, (key, value)) in self.iter().enumerate() {
             if i > 0 {
@@ -299,14 +294,9 @@ where
         parser.expect_object_start()?;
         let mut result = BTreeMap::new();
 
-        loop {
-            match parser.next_object_key()? {
-                Some(key) => {
-                    let value = V::json_deserialize(parser)?;
-                    result.insert(K::from(key.into_owned()), value);
-                }
-                None => break,
-            }
+        while let Some(key) = parser.next_object_key()? {
+            let value = V::json_deserialize(parser)?;
+            result.insert(K::from(key.into_owned()), value);
         }
 
         Ok(result)
@@ -316,7 +306,7 @@ where
 // Box
 impl<T: JsonSerialize + ?Sized> JsonSerialize for Box<T> {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         (**self).json_serialize(writer);
     }
 }
@@ -331,14 +321,14 @@ impl<T: JsonDeserialize> JsonDeserialize for Box<T> {
 // References (serialize only) - blanket impl for all references
 impl<T: JsonSerialize + ?Sized> JsonSerialize for &T {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         (**self).json_serialize(writer);
     }
 }
 
 impl<T: JsonSerialize + ?Sized> JsonSerialize for &mut T {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         (**self).json_serialize(writer);
     }
 }
@@ -346,7 +336,7 @@ impl<T: JsonSerialize + ?Sized> JsonSerialize for &mut T {
 // Unit type
 impl JsonSerialize for () {
     #[inline]
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.write_null();
     }
 }
@@ -364,7 +354,8 @@ macro_rules! impl_tuple {
     ($($idx:tt $T:ident),+) => {
         impl<$($T: JsonSerialize),+> JsonSerialize for ($($T,)+) {
             #[inline]
-            fn json_serialize(&self, writer: &mut JsonWriter) {
+            #[allow(unused_assignments)]
+            fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
                 writer.begin_array();
                 let mut first = true;
                 $(
@@ -408,7 +399,7 @@ impl_tuple!(0 T0, 1 T1, 2 T2, 3 T3, 4 T4, 5 T5, 6 T6, 7 T7);
 
 // JsonValue
 impl JsonSerialize for crate::JsonValue {
-    fn json_serialize(&self, writer: &mut JsonWriter) {
+    fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         use crate::JsonValue;
         match self {
             JsonValue::Null => writer.write_null(),

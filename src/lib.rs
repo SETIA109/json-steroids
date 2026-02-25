@@ -29,7 +29,7 @@ mod error;
 mod parser;
 mod traits;
 mod value;
-mod writer;
+pub mod writer;
 
 pub use error::{JsonError, Result};
 pub use parser::JsonParser;

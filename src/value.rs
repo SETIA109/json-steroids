@@ -6,9 +6,10 @@
 use std::ops::Index;
 
 /// A dynamic JSON value
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum JsonValue {
     /// Null value
+    #[default]
     Null,
     /// Boolean value
     Bool(bool),
@@ -228,12 +229,6 @@ impl Index<usize> for JsonValue {
 
     fn index(&self, index: usize) -> &Self::Output {
         self.get_index(index).unwrap_or(&NULL)
-    }
-}
-
-impl Default for JsonValue {
-    fn default() -> Self {
-        JsonValue::Null
     }
 }
 

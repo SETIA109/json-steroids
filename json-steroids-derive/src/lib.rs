@@ -44,7 +44,7 @@ pub fn derive_json_serialize(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics #krate::JsonSerialize for #name #ty_generics #where_clause {
-            fn json_serialize(&self, writer: &mut #krate::JsonWriter) {
+            fn json_serialize<W: #krate::writer::Writer>(&self, writer: &mut #krate::JsonWriter<W>) {
                 #serialize_body
             }
         }
@@ -98,7 +98,7 @@ pub fn derive_json(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics #krate::JsonSerialize for #name #ty_generics #where_clause {
-            fn json_serialize(&self, writer: &mut #krate::JsonWriter) {
+            fn json_serialize<W: #krate::writer::Writer>(&self, writer: &mut #krate::JsonWriter<W>) {
                 #serialize_body
             }
         }
