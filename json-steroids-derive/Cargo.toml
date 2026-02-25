@@ -1,6 +1,6 @@
 [package]
 name = "json-steroids-derive"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Macro crate for json-steroids, providing procedural macros for blazing fast JSON serialization and deserialization."
 license = "MIT"
