@@ -7,9 +7,11 @@ members = [
 name = "json-steroids"
 version = "0.1.0"
 edition = "2021"
+description = "Blazing fast JSON serialization and deserialization library, powered by procedural macros."
+license = "MIT"
 
 [dependencies]
-json-steroids-derive = { path = "./json-steroids-derive" }
+json-steroids-derive = { path = "./json-steroids-derive", version = "0.1.0"}
 itoa = "1.0"
 ryu = "1.0"
 
