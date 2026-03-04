@@ -17,9 +17,12 @@ pub trait JsonSerialize {
 }
 
 /// Trait for types that can be deserialized from JSON
-pub trait JsonDeserialize: Sized {
+///
+/// The lifetime parameter `'de` represents the lifetime of the data being deserialized,
+/// which allows for zero-copy deserialization when possible.
+pub trait JsonDeserialize<'de>: Sized {
     /// Deserialize a value from the given parser
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self>;
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self>;
 }
 
 // ============ Primitive implementations ============
@@ -31,27 +34,27 @@ impl JsonSerialize for bool {
     }
 }
 
-impl JsonDeserialize for bool {
+impl<'de> JsonDeserialize<'de> for bool {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.parse_bool()
     }
 }
 
 // Signed integers
 macro_rules! impl_json_signed {
-    ($($ty:ty),*) => {
+    ($($ty:ty, $write_method:ident),*) => {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
                 fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
-                    writer.write_i64(*self as i64);
+                    writer.$write_method(*self);
                 }
             }
 
-            impl JsonDeserialize for $ty {
+            impl<'de> JsonDeserialize<'de> for $ty {
                 #[inline]
-                fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self>
+                fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self>
                 where Self: ParseInt {
                     parser.parse_integer::<Self>()
                 }
@@ -60,22 +63,33 @@ macro_rules! impl_json_signed {
     };
 }
 
-impl_json_signed!(i8, i16, i32, i64, isize);
+impl_json_signed!(
+    i8,
+    write_i8,
+    i16,
+    write_i16,
+    i32,
+    write_i32,
+    i64,
+    write_i64,
+    isize,
+    write_isize
+);
 
 // Unsigned integers
 macro_rules! impl_json_unsigned {
-    ($($ty:ty),*) => {
+    ($($ty:ty, $write_method:ident),*) => {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
                 fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
-                    writer.write_u64(*self as u64);
+                    writer.$write_method(*self);
                 }
             }
 
-            impl JsonDeserialize for $ty {
+            impl<'de> JsonDeserialize<'de> for $ty {
                 #[inline]
-                fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self>
+                fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self>
                 where Self: ParseInt {
                     parser.parse_integer::<Self>()
                 }
@@ -84,22 +98,33 @@ macro_rules! impl_json_unsigned {
     };
 }
 
-impl_json_unsigned!(u8, u16, u32, u64, usize);
+impl_json_unsigned!(
+    u8,
+    write_u8,
+    u16,
+    write_u16,
+    u32,
+    write_u32,
+    u64,
+    write_u64,
+    usize,
+    write_usize
+);
 
 // Floats
 macro_rules! impl_json_float {
-    ($($ty:ty),*) => {
+    ($($ty:ty, $write_method:ident),*) => {
         $(
             impl JsonSerialize for $ty {
                 #[inline]
                 fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
-                    writer.write_f64(*self as f64);
+                    writer.$write_method(*self);
                 }
             }
 
-            impl JsonDeserialize for $ty {
+            impl<'de> JsonDeserialize<'de> for $ty {
                 #[inline]
-                fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+                fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
                     parser.parse_float()
                 }
             }
@@ -107,7 +132,7 @@ macro_rules! impl_json_float {
     };
 }
 
-impl_json_float!(f32, f64);
+impl_json_float!(f32, write_f32, f64, write_f64);
 
 // String types
 impl JsonSerialize for String {
@@ -117,9 +142,9 @@ impl JsonSerialize for String {
     }
 }
 
-impl JsonDeserialize for String {
+impl<'de> JsonDeserialize<'de> for String {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.parse_string().map(|s| s.into_owned())
     }
 }
@@ -138,10 +163,28 @@ impl<'a> JsonSerialize for Cow<'a, str> {
     }
 }
 
-impl<'a> JsonDeserialize for Cow<'a, str> {
+impl<'de> JsonDeserialize<'de> for Cow<'de, str> {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
-        parser.parse_string().map(|s| Cow::Owned(s.into_owned()))
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
+        parser.parse_string()
+    }
+}
+
+impl<'de> JsonDeserialize<'de> for &'de str {
+    #[inline]
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
+        match parser.parse_string()? {
+            Cow::Borrowed(s) => Ok(s),
+            Cow::Owned(_) => {
+                // If the string contains escapes and needs to be owned,
+                // we can't return a borrowed &str. This is a limitation of zero-copy deserialization.
+                // In practice, this means &str deserialization only works with strings without escapes.
+                // For a more flexible approach, use Cow<'de, str> instead.
+                Err(crate::error::JsonError::Custom(
+                    "Cannot deserialize &str from string with escape sequences. Use Cow<'de, str> or String instead.".into()
+                ))
+            }
+        }
     }
 }
 
@@ -156,9 +199,9 @@ impl<T: JsonSerialize> JsonSerialize for Option<T> {
     }
 }
 
-impl<T: JsonDeserialize> JsonDeserialize for Option<T> {
+impl<'de, T: JsonDeserialize<'de>> JsonDeserialize<'de> for Option<T> {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.skip_whitespace_pub();
         if parser.peek_is_null() {
             parser.expect_null()?;
@@ -174,22 +217,28 @@ impl<T: JsonSerialize> JsonSerialize for Vec<T> {
     #[inline]
     fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
-        for (i, item) in self.iter().enumerate() {
-            if i > 0 {
+
+        let mut iter = self.iter();
+        if let Some(first) = iter.next() {
+            first.json_serialize(writer);
+
+            // Rest of elements with comma prefix
+            for item in iter {
                 writer.write_comma();
+                item.json_serialize(writer);
             }
-            item.json_serialize(writer);
         }
+
         writer.end_array();
     }
 }
 
-impl<T: JsonDeserialize> JsonDeserialize for Vec<T> {
+impl<'de, T: JsonDeserialize<'de>> JsonDeserialize<'de> for Vec<T> {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.expect_array_start()?;
         // Start with a reasonable capacity to avoid repeated reallocations
-        let mut result = Vec::with_capacity(8);
+        let mut result = Vec::with_capacity(128);
 
         let mut first = true;
         loop {
@@ -210,12 +259,19 @@ impl<T: JsonSerialize> JsonSerialize for [T] {
     #[inline]
     fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
-        for (i, item) in self.iter().enumerate() {
-            if i > 0 {
+
+        // Handle first element separately to avoid conditional in hot loop
+        let mut iter = self.iter();
+        if let Some(first) = iter.next() {
+            first.json_serialize(writer);
+
+            // Rest of elements with comma prefix
+            for item in iter {
                 writer.write_comma();
+                item.json_serialize(writer);
             }
-            item.json_serialize(writer);
         }
+
         writer.end_array();
     }
 }
@@ -225,12 +281,19 @@ impl<T: JsonSerialize, const N: usize> JsonSerialize for [T; N] {
     #[inline]
     fn json_serialize<W: Writer>(&self, writer: &mut JsonWriter<W>) {
         writer.begin_array();
-        for (i, item) in self.iter().enumerate() {
-            if i > 0 {
+
+        // Handle first element separately to avoid conditional in hot loop
+        let mut iter = self.iter();
+        if let Some(first) = iter.next() {
+            first.json_serialize(writer);
+
+            // Rest of elements with comma prefix
+            for item in iter {
                 writer.write_comma();
+                item.json_serialize(writer);
             }
-            item.json_serialize(writer);
         }
+
         writer.end_array();
     }
 }
@@ -251,12 +314,13 @@ impl<K: AsRef<str>, V: JsonSerialize> JsonSerialize for HashMap<K, V> {
     }
 }
 
-impl<K: JsonDeserialize + Eq + Hash, V: JsonDeserialize> JsonDeserialize for HashMap<K, V>
+impl<'de, K, V> JsonDeserialize<'de> for HashMap<K, V>
 where
-    K: From<String>,
+    K: From<String> + Eq + Hash,
+    V: JsonDeserialize<'de>,
 {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.expect_object_start()?;
         let mut result = HashMap::new();
 
@@ -285,12 +349,13 @@ impl<K: AsRef<str>, V: JsonSerialize> JsonSerialize for BTreeMap<K, V> {
     }
 }
 
-impl<K: JsonDeserialize + Ord, V: JsonDeserialize> JsonDeserialize for BTreeMap<K, V>
+impl<'de, K, V> JsonDeserialize<'de> for BTreeMap<K, V>
 where
-    K: From<String>,
+    K: From<String> + Ord,
+    V: JsonDeserialize<'de>,
 {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.expect_object_start()?;
         let mut result = BTreeMap::new();
 
@@ -311,9 +376,9 @@ impl<T: JsonSerialize + ?Sized> JsonSerialize for Box<T> {
     }
 }
 
-impl<T: JsonDeserialize> JsonDeserialize for Box<T> {
+impl<'de, T: JsonDeserialize<'de>> JsonDeserialize<'de> for Box<T> {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         T::json_deserialize(parser).map(Box::new)
     }
 }
@@ -341,9 +406,9 @@ impl JsonSerialize for () {
     }
 }
 
-impl JsonDeserialize for () {
+impl<'de> JsonDeserialize<'de> for () {
     #[inline]
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.expect_null()?;
         Ok(())
     }
@@ -369,9 +434,9 @@ macro_rules! impl_tuple {
             }
         }
 
-        impl<$($T: JsonDeserialize),+> JsonDeserialize for ($($T,)+) {
+        impl<'de, $($T: JsonDeserialize<'de>),+> JsonDeserialize<'de> for ($($T,)+) {
             #[inline]
-            fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+            fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
                 parser.expect_array_start()?;
                 let result = ($(
                     {
@@ -432,8 +497,8 @@ impl JsonSerialize for crate::JsonValue {
     }
 }
 
-impl JsonDeserialize for crate::JsonValue {
-    fn json_deserialize(parser: &mut JsonParser<'_>) -> Result<Self> {
+impl<'de> JsonDeserialize<'de> for crate::JsonValue {
+    fn json_deserialize(parser: &mut JsonParser<'de>) -> Result<Self> {
         parser.parse_value()
     }
 }

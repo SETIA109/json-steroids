@@ -68,14 +68,22 @@ pub fn derive_json_deserialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
     let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let krate = crate_path();
 
     let deserialize_body = generate_deserialize_body(&input.data, name, &krate);
 
+    // Add 'de lifetime to generics only if it doesn't already exist
+    let mut generics_with_de = generics.clone();
+    let has_de_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "de");
+    if !has_de_lifetime {
+        generics_with_de.params.insert(0, syn::parse_quote!('de));
+    }
+    let (impl_generics, _, _) = generics_with_de.split_for_impl();
+    let (_, ty_generics, where_clause) = generics.split_for_impl();
+
     let expanded = quote! {
-        impl #impl_generics #krate::JsonDeserialize for #name #ty_generics #where_clause {
-            fn json_deserialize(parser: &mut #krate::JsonParser<'_>) -> #krate::Result<Self> {
+        impl #impl_generics #krate::JsonDeserialize<'de> for #name #ty_generics #where_clause {
+            fn json_deserialize(parser: &mut #krate::JsonParser<'de>) -> #krate::Result<Self> {
                 #deserialize_body
             }
         }
@@ -90,11 +98,21 @@ pub fn derive_json(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
     let generics = &input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
     let krate = crate_path();
 
     let serialize_body = generate_serialize_body(&input.data, name, &krate);
     let deserialize_body = generate_deserialize_body(&input.data, name, &krate);
+
+    // For serialize: use normal generics
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    // For deserialize: add 'de lifetime only if it doesn't already exist
+    let mut generics_with_de = generics.clone();
+    let has_de_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "de");
+    if !has_de_lifetime {
+        generics_with_de.params.insert(0, syn::parse_quote!('de));
+    }
+    let (impl_generics_de, _, _) = generics_with_de.split_for_impl();
 
     let expanded = quote! {
         impl #impl_generics #krate::JsonSerialize for #name #ty_generics #where_clause {
@@ -103,8 +121,8 @@ pub fn derive_json(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics #krate::JsonDeserialize for #name #ty_generics #where_clause {
-            fn json_deserialize(parser: &mut #krate::JsonParser<'_>) -> #krate::Result<Self> {
+        impl #impl_generics_de #krate::JsonDeserialize<'de> for #name #ty_generics #where_clause {
+            fn json_deserialize(parser: &mut #krate::JsonParser<'de>) -> #krate::Result<Self> {
                 #deserialize_body
             }
         }
@@ -125,13 +143,13 @@ fn generate_serialize_body(data: &Data, _name: &Ident, krate: &TokenStream2) -> 
 
                         if is_first {
                             quote! {
-                                writer.write_key(#field_name_str);
+                                writer.write_unescape_key(#field_name_str);
                                 #krate::JsonSerialize::json_serialize(&self.#field_name, writer);
                             }
                         } else {
                             quote! {
                                 writer.write_comma();
-                                writer.write_key(#field_name_str);
+                                writer.write_unescape_key(#field_name_str);
                                 #krate::JsonSerialize::json_serialize(&self.#field_name, writer);
                             }
                         }
@@ -225,7 +243,7 @@ fn generate_serialize_body(data: &Data, _name: &Ident, krate: &TokenStream2) -> 
                             } else {
                                 quote! {
                                     writer.write_comma();
-                                    writer.write_key(#name_str);
+                                    writer.write_unescape_key(#name_str);
                                     #krate::JsonSerialize::json_serialize(#name, writer);
                                 }
                             }

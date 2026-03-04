@@ -382,14 +382,14 @@ impl<'a> JsonParser<'a> {
             self.pos += 1;
         }
 
-        if !matches!(self.input.get(self.pos), Some(b'0'..=b'9')) {
-            return Err(JsonError::InvalidNumber(start));
-        }
-
         let mut value: u64 = 0;
         while let Some(&d @ b'0'..=b'9') = self.input.get(self.pos) {
             value = value.wrapping_mul(10).wrapping_add((d - b'0') as u64);
             self.pos += 1;
+        }
+
+        if self.pos == start || (negative && self.pos == start + 1) {
+            return Err(JsonError::InvalidNumber(start));
         }
 
         T::from_parts(negative, value).ok_or(JsonError::InvalidNumber(start))

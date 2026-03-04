@@ -35,18 +35,30 @@ pub trait Writer {
     fn end_array(&mut self);
     fn write_comma(&mut self);
     fn write_key(&mut self, key: &str);
+    fn write_unescape_key(&mut self, s: &str);
     fn write_string(&mut self, s: &str);
     fn write_raw(&mut self, s: &str);
     fn write_null(&mut self);
     fn write_bool(&mut self, value: bool);
+    fn write_i8(&mut self, value: i8);
+    fn write_i16(&mut self, value: i16);
+    fn write_i32(&mut self, value: i32);
     fn write_i64(&mut self, value: i64);
+    fn write_isize(&mut self, value: isize);
+    fn write_u8(&mut self, value: u8);
+    fn write_u16(&mut self, value: u16);
+    fn write_u32(&mut self, value: u32);
     fn write_u64(&mut self, value: u64);
+    fn write_usize(&mut self, value: usize);
+    fn write_f32(&mut self, value: f32);
     fn write_f64(&mut self, value: f64);
 }
 
 /// Compact JSON writer (no indentation)
 pub struct CompactWriter {
     buffer: Vec<u8>,
+    itoa_buffer: itoa::Buffer,
+    ryu_buffer: ryu::Buffer,
 }
 
 /// Pretty-printed JSON writer (with indentation)
@@ -67,6 +79,8 @@ impl CompactWriter {
     pub fn new(capacity: usize) -> Self {
         Self {
             buffer: Vec::with_capacity(capacity),
+            itoa_buffer: itoa::Buffer::new(),
+            ryu_buffer: ryu::Buffer::new(),
         }
     }
 }
@@ -120,6 +134,13 @@ impl Writer for CompactWriter {
     }
 
     #[inline]
+    fn write_unescape_key(&mut self, s: &str) {
+        self.buffer.push(b'"');
+        self.buffer.extend_from_slice(s.as_bytes());
+        self.buffer.extend_from_slice(b"\":");
+    }
+
+    #[inline]
     fn write_string(&mut self, s: &str) {
         self.buffer.push(b'"');
         write_escaped_string(&mut self.buffer, s);
@@ -146,24 +167,75 @@ impl Writer for CompactWriter {
     }
 
     #[inline]
-    fn write_i64(&mut self, value: i64) {
-        let mut buffer = itoa::Buffer::new();
+    fn write_i8(&mut self, value: i8) {
         self.buffer
-            .extend_from_slice(buffer.format(value).as_bytes());
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_i16(&mut self, value: i16) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_i32(&mut self, value: i32) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_i64(&mut self, value: i64) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_isize(&mut self, value: isize) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u8(&mut self, value: u8) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u16(&mut self, value: u16) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u32(&mut self, value: u32) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
     }
 
     #[inline]
     fn write_u64(&mut self, value: u64) {
-        let mut buffer = itoa::Buffer::new();
         self.buffer
-            .extend_from_slice(buffer.format(value).as_bytes());
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_usize(&mut self, value: usize) {
+        self.buffer
+            .extend_from_slice(self.itoa_buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_f32(&mut self, value: f32) {
+        self.buffer
+            .extend_from_slice(self.ryu_buffer.format(value).as_bytes());
     }
 
     #[inline]
     fn write_f64(&mut self, value: f64) {
-        let mut buffer = ryu::Buffer::new();
         self.buffer
-            .extend_from_slice(buffer.format(value).as_bytes());
+            .extend_from_slice(self.ryu_buffer.format(value).as_bytes());
     }
 }
 
@@ -253,6 +325,14 @@ impl Writer for PrettyWriter {
     }
 
     #[inline]
+    fn write_unescape_key(&mut self, key: &str) {
+        self.write_indent();
+        self.buffer.push(b'"');
+        self.buffer.extend_from_slice(key.as_bytes());
+        self.buffer.extend_from_slice(b"\": ");
+    }
+
+    #[inline]
     fn write_string(&mut self, s: &str) {
         self.write_indent();
         self.buffer.push(b'"');
@@ -283,7 +363,63 @@ impl Writer for PrettyWriter {
     }
 
     #[inline]
+    fn write_i8(&mut self, value: i8) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_i16(&mut self, value: i16) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_i32(&mut self, value: i32) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
     fn write_i64(&mut self, value: i64) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_isize(&mut self, value: isize) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u8(&mut self, value: u8) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u16(&mut self, value: u16) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_u32(&mut self, value: u32) {
         self.write_indent();
         let mut buffer = itoa::Buffer::new();
         self.buffer
@@ -294,6 +430,22 @@ impl Writer for PrettyWriter {
     fn write_u64(&mut self, value: u64) {
         self.write_indent();
         let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_usize(&mut self, value: usize) {
+        self.write_indent();
+        let mut buffer = itoa::Buffer::new();
+        self.buffer
+            .extend_from_slice(buffer.format(value).as_bytes());
+    }
+
+    #[inline]
+    fn write_f32(&mut self, value: f32) {
+        self.write_indent();
+        let mut buffer = ryu::Buffer::new();
         self.buffer
             .extend_from_slice(buffer.format(value).as_bytes());
     }
@@ -312,34 +464,45 @@ impl Writer for PrettyWriter {
 #[inline]
 fn write_escaped_string(buffer: &mut Vec<u8>, s: &str) {
     let bytes = s.as_bytes();
-    let mut start = 0; // start of the current clean run
+    let mut start = 0;
 
-    for (i, &byte) in bytes.iter().enumerate() {
-        if NEEDS_ESCAPE[byte as usize] {
-            // Flush the clean run up to this point
+    for i in 0..bytes.len() {
+        let byte = unsafe { *bytes.get_unchecked(i) };
+
+        if unsafe { *NEEDS_ESCAPE.get_unchecked(byte as usize) } {
+            // Write any accumulated clean bytes
             if start < i {
                 buffer.extend_from_slice(&bytes[start..i]);
             }
-            match byte {
-                b'"' => buffer.extend_from_slice(b"\\\""),
-                b'\\' => buffer.extend_from_slice(b"\\\\"),
-                b'\n' => buffer.extend_from_slice(b"\\n"),
-                b'\r' => buffer.extend_from_slice(b"\\r"),
-                b'\t' => buffer.extend_from_slice(b"\\t"),
-                0x08 => buffer.extend_from_slice(b"\\b"),
-                0x0C => buffer.extend_from_slice(b"\\f"),
+
+            // Write the escape sequence
+            buffer.push(b'\\');
+            let escaped = match byte {
+                b'"' => b'"',
+                b'\\' => b'\\',
+                b'\n' => b'n',
+                b'\r' => b'r',
+                b'\t' => b't',
+                b'\x08' => b'b', // backspace
+                b'\x0C' => b'f', // form feed
                 _ => {
-                    // Other control characters as \u00XX
-                    buffer.extend_from_slice(b"\\u00");
-                    buffer.push(HEX_CHARS[(byte >> 4) as usize]);
-                    buffer.push(HEX_CHARS[(byte & 0x0F) as usize]);
+                    // Unicode escape for other control characters
+                    buffer.push(b'u');
+                    buffer.push(b'0');
+                    buffer.push(b'0');
+                    let hex_digits = b"0123456789abcdef";
+                    buffer.push(hex_digits[(byte >> 4) as usize]);
+                    buffer.push(hex_digits[(byte & 0x0F) as usize]);
+                    start = i + 1;
+                    continue;
                 }
-            }
+            };
+            buffer.push(escaped);
             start = i + 1;
         }
     }
 
-    // Flush the remaining clean run
+    // Write any remaining clean bytes
     if start < bytes.len() {
         buffer.extend_from_slice(&bytes[start..]);
     }
@@ -350,7 +513,7 @@ impl JsonWriter<CompactWriter> {
     #[inline]
     pub fn new() -> Self {
         Self {
-            inner: CompactWriter::new(1024),
+            inner: CompactWriter::new(2048),
         }
     }
 
@@ -424,6 +587,12 @@ impl<W: Writer> JsonWriter<W> {
         self.inner.write_key(key);
     }
 
+    /// Write an object key
+    #[inline]
+    pub fn write_unescape_key(&mut self, key: &str) {
+        self.inner.write_unescape_key(key);
+    }
+
     /// Write a string value with proper escaping (single-pass)
     #[inline]
     pub fn write_string(&mut self, s: &str) {
@@ -448,19 +617,73 @@ impl<W: Writer> JsonWriter<W> {
         self.inner.write_bool(value);
     }
 
-    /// Write an integer
+    /// Write an i8
+    #[inline]
+    pub fn write_i8(&mut self, value: i8) {
+        self.inner.write_i8(value);
+    }
+
+    /// Write an i16
+    #[inline]
+    pub fn write_i16(&mut self, value: i16) {
+        self.inner.write_i16(value);
+    }
+
+    /// Write an i32
+    #[inline]
+    pub fn write_i32(&mut self, value: i32) {
+        self.inner.write_i32(value);
+    }
+
+    /// Write an i64
     #[inline]
     pub fn write_i64(&mut self, value: i64) {
         self.inner.write_i64(value);
     }
 
-    /// Write an unsigned integer
+    /// Write an isize
+    #[inline]
+    pub fn write_isize(&mut self, value: isize) {
+        self.inner.write_isize(value);
+    }
+
+    /// Write a u8
+    #[inline]
+    pub fn write_u8(&mut self, value: u8) {
+        self.inner.write_u8(value);
+    }
+
+    /// Write a u16
+    #[inline]
+    pub fn write_u16(&mut self, value: u16) {
+        self.inner.write_u16(value);
+    }
+
+    /// Write a u32
+    #[inline]
+    pub fn write_u32(&mut self, value: u32) {
+        self.inner.write_u32(value);
+    }
+
+    /// Write a u64
     #[inline]
     pub fn write_u64(&mut self, value: u64) {
         self.inner.write_u64(value);
     }
 
-    /// Write a float
+    /// Write a usize
+    #[inline]
+    pub fn write_usize(&mut self, value: usize) {
+        self.inner.write_usize(value);
+    }
+
+    /// Write an f32
+    #[inline]
+    pub fn write_f32(&mut self, value: f32) {
+        self.inner.write_f32(value);
+    }
+
+    /// Write an f64
     #[inline]
     pub fn write_f64(&mut self, value: f64) {
         self.inner.write_f64(value);
@@ -472,9 +695,6 @@ impl Default for JsonWriter<CompactWriter> {
         Self::new()
     }
 }
-
-/// Hex character lookup table
-const HEX_CHARS: [u8; 16] = *b"0123456789abcdef";
 
 #[cfg(test)]
 mod tests {

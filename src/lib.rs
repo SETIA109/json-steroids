@@ -58,14 +58,14 @@ pub fn to_string_pretty<T: JsonSerialize>(value: &T) -> String {
 
 /// Deserialize a value from a JSON string
 #[inline]
-pub fn from_str<T: JsonDeserialize>(s: &str) -> Result<T> {
+pub fn from_str<'de, T: JsonDeserialize<'de>>(s: &'de str) -> Result<T> {
     let mut parser = JsonParser::new(s);
     T::json_deserialize(&mut parser)
 }
 
 /// Deserialize a value from JSON bytes
 #[inline]
-pub fn from_bytes<T: JsonDeserialize>(bytes: &[u8]) -> Result<T> {
+pub fn from_bytes<'de, T: JsonDeserialize<'de>>(bytes: &'de [u8]) -> Result<T> {
     let s = std::str::from_utf8(bytes).map_err(|_| JsonError::InvalidUtf8)?;
     from_str(s)
 }

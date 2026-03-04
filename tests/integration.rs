@@ -16,8 +16,8 @@
 //! - Large payload correctness
 
 use json_steroids::{
-    from_bytes, from_str, parse, to_string, to_string_pretty, Json, JsonDeserialize, JsonSerialize,
-    JsonValue, JsonWriter,
+    from_bytes, from_str, parse, to_string, to_string_pretty, Json, JsonSerialize, JsonValue,
+    JsonWriter,
 };
 use std::collections::{BTreeMap, HashMap};
 
@@ -824,4 +824,217 @@ fn exceed_depth_limit_returns_error() {
     let open: String = "{\"x\":".repeat(130);
     let json = format!("{}0{}", open, "}".repeat(130));
     assert!(parse(&json).is_err());
+}
+
+// ─────────────────────────────────────────────
+// 17. Zero-copy Cow<'de, str> tests
+// ─────────────────────────────────────────────
+
+use std::borrow::Cow;
+
+#[test]
+fn cow_zero_copy_simple_string() {
+    let json = r#""hello world""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "hello world");
+    assert!(
+        matches!(result, Cow::Borrowed(_)),
+        "Should be zero-copy for simple strings"
+    );
+}
+
+#[test]
+fn cow_zero_copy_empty_string() {
+    let json = r#""""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "");
+    assert!(
+        matches!(result, Cow::Borrowed(_)),
+        "Empty string should be zero-copy"
+    );
+}
+
+#[test]
+fn cow_zero_copy_unicode() {
+    let json = r#""日本語 🦀 Rust""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "日本語 🦀 Rust");
+    assert!(
+        matches!(result, Cow::Borrowed(_)),
+        "Unicode without escapes should be zero-copy"
+    );
+}
+
+#[test]
+fn cow_zero_copy_long_string() {
+    let content = "a".repeat(10000);
+    let json = format!(r#""{}""#, content);
+    let result: Cow<str> = from_str(&json).unwrap();
+    assert_eq!(result.len(), 10000);
+    assert!(
+        matches!(result, Cow::Borrowed(_)),
+        "Long strings without escapes should be zero-copy"
+    );
+}
+
+#[test]
+fn cow_owned_with_newline() {
+    let json = r#""hello\nworld""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "hello\nworld");
+    assert!(
+        matches!(result, Cow::Owned(_)),
+        "Strings with escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_owned_with_tab() {
+    let json = r#""col1\tcol2""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "col1\tcol2");
+    assert!(
+        matches!(result, Cow::Owned(_)),
+        "Strings with escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_owned_with_quote() {
+    let json = r#""say \"hello\"""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, r#"say "hello""#);
+    assert!(
+        matches!(result, Cow::Owned(_)),
+        "Strings with escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_owned_with_backslash() {
+    let json = r#""path\\to\\file""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, r"path\to\file");
+    assert!(
+        matches!(result, Cow::Owned(_)),
+        "Strings with escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_owned_with_unicode_escape() {
+    let json = r#""\u0048ello""#;
+    let result: Cow<str> = from_str(json).unwrap();
+    assert_eq!(result, "Hello");
+    assert!(
+        matches!(result, Cow::Owned(_)),
+        "Strings with unicode escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_in_vec_zero_copy() {
+    let json = r#"["one","two","three"]"#;
+    let result: Vec<Cow<str>> = from_str(json).unwrap();
+    assert_eq!(result.len(), 3);
+    assert!(matches!(result[0], Cow::Borrowed(_)));
+    assert!(matches!(result[1], Cow::Borrowed(_)));
+    assert!(matches!(result[2], Cow::Borrowed(_)));
+}
+
+#[test]
+fn cow_in_vec_mixed() {
+    let json = r#"["simple","with\nescape","another"]"#;
+    let result: Vec<Cow<str>> = from_str(json).unwrap();
+    assert_eq!(result.len(), 3);
+    assert!(
+        matches!(result[0], Cow::Borrowed(_)),
+        "Simple string should be borrowed"
+    );
+    assert!(
+        matches!(result[1], Cow::Owned(_)),
+        "String with escape should be owned"
+    );
+    assert!(
+        matches!(result[2], Cow::Borrowed(_)),
+        "Simple string should be borrowed"
+    );
+}
+
+#[test]
+fn cow_in_option_some_zero_copy() {
+    let json = r#""test""#;
+    let result: Option<Cow<str>> = from_str(json).unwrap();
+    assert!(result.is_some());
+    assert!(matches!(result.unwrap(), Cow::Borrowed(_)));
+}
+
+#[test]
+fn cow_in_option_none() {
+    let json = r#"null"#;
+    let result: Option<Cow<str>> = from_str(json).unwrap();
+    assert!(result.is_none());
+}
+
+// Helper struct for testing Cow in structs - don't use derive with lifetimes
+// Instead, manually implement or use a simpler test
+#[test]
+fn cow_in_struct_zero_copy_manual() {
+    // Test that we can deserialize into a map with Cow values
+    use std::collections::HashMap;
+    let json = r#"{"name":"Alice","email":"alice@example.com"}"#;
+    let result: HashMap<String, Cow<str>> = from_str(json).unwrap();
+
+    assert_eq!(result.get("name").unwrap(), &"Alice");
+    assert_eq!(result.get("email").unwrap(), &"alice@example.com");
+    assert!(
+        matches!(result.get("name").unwrap(), Cow::Borrowed(_)),
+        "Name should be zero-copy"
+    );
+    assert!(
+        matches!(result.get("email").unwrap(), Cow::Borrowed(_)),
+        "Email should be zero-copy"
+    );
+}
+
+#[test]
+fn cow_in_struct_mixed_manual() {
+    use std::collections::HashMap;
+    let json = r#"{"name":"Alice","email":"alice\n@example.com"}"#;
+    let result: HashMap<String, Cow<str>> = from_str(json).unwrap();
+
+    assert!(
+        matches!(result.get("name").unwrap(), Cow::Borrowed(_)),
+        "Name without escapes should be borrowed"
+    );
+    assert!(
+        matches!(result.get("email").unwrap(), Cow::Owned(_)),
+        "Email with escapes should be owned"
+    );
+}
+
+#[test]
+fn cow_serialize_borrowed() {
+    let borrowed: Cow<str> = Cow::Borrowed("test");
+    let json = to_string(&borrowed);
+    assert_eq!(json, r#""test""#);
+}
+
+#[test]
+fn cow_serialize_owned() {
+    let owned: Cow<str> = Cow::Owned("test".to_string());
+    let json = to_string(&owned);
+    assert_eq!(json, r#""test""#);
+}
+
+#[test]
+fn cow_roundtrip_preserves_value() {
+    let original = "Hello, Rust! 日本語";
+    let json = format!(r#""{}""#, original);
+    let parsed: Cow<str> = from_str(&json).unwrap();
+    assert_eq!(parsed.as_ref(), original);
+    // Roundtrip back
+    let json2 = to_string(&parsed);
+    let parsed2: Cow<str> = from_str(&json2).unwrap();
+    assert_eq!(parsed2.as_ref(), original);
 }

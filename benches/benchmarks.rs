@@ -207,29 +207,48 @@ fn bench_parse_dynamic_comparison(c: &mut Criterion) {
 }
 
 fn bench_large_array_comparison(c: &mut Criterion) {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct SerdeArrayWrapper {
+        items: Vec<i32>,
+    }
+
+    #[derive(Debug, Json)]
+    struct JsonSteroidsArrayWrapper {
+        items: Vec<i32>,
+    }
+
     let data: Vec<i32> = (0..1000).collect();
-    let json = to_string(&data);
+    let json_steroids_data = JsonSteroidsArrayWrapper {
+        items: data.clone(),
+    };
+    let serde_data = SerdeArrayWrapper {
+        items: data.clone(),
+    };
 
     let mut group = c.benchmark_group("large_array_serialize");
     group.throughput(Throughput::Elements(1000));
 
-    group.bench_function("json-steroids", |b| b.iter(|| to_string(black_box(&data))));
+    group.bench_function("json-steroids", |b| {
+        b.iter(|| to_string(black_box(&json_steroids_data)))
+    });
 
     group.bench_function("serde_json", |b| {
-        b.iter(|| serde_json::to_string(black_box(&data)).unwrap())
+        b.iter(|| serde_json::to_string(black_box(&serde_data)).unwrap())
     });
 
     group.finish();
+
+    let json = to_string(&json_steroids_data);
 
     let mut group = c.benchmark_group("large_array_deserialize");
     group.throughput(Throughput::Elements(1000));
 
     group.bench_function("json-steroids", |b| {
-        b.iter(|| from_str::<Vec<i32>>(black_box(&json)))
+        b.iter(|| from_str::<JsonSteroidsArrayWrapper>(black_box(&json)))
     });
 
     group.bench_function("serde_json", |b| {
-        b.iter(|| serde_json::from_str::<Vec<i32>>(black_box(&json)))
+        b.iter(|| serde_json::from_str::<SerdeArrayWrapper>(black_box(&json)))
     });
 
     group.finish();
@@ -429,6 +448,116 @@ fn bench_numbers_comparison(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_cow_struct_comparison(c: &mut Criterion) {
+    use std::borrow::Cow;
+
+    // serde_json struct with borrowed fields (zero-copy capable)
+    #[derive(Debug, Serialize, Deserialize)]
+    struct SerdeUserDataBorrowed<'a> {
+        username: Cow<'a, str>,
+        email: Cow<'a, str>,
+        full_name: Cow<'a, str>,
+        bio: Cow<'a, str>,
+    }
+
+    // serde_json struct with borrowed fields (zero-copy capable)
+    #[derive(Debug, Json)]
+    struct JsonSteroidsUserDataBorrowed<'de> {
+        username: Cow<'de, str>,
+        email: Cow<'de, str>,
+        full_name: Cow<'de, str>,
+        bio: Cow<'de, str>,
+    }
+
+    // JSON with simple strings (no escape sequences - optimal for zero-copy)
+    let json = r#"{"username":"alice_rust","email":"alice@example.com","full_name":"Alice Johnson","bio":"Rust enthusiast and open source contributor"}"#;
+
+    let mut group = c.benchmark_group("cow_struct_deserialize");
+    group.throughput(Throughput::Bytes(json.len() as u64));
+
+    group.bench_function("json-steroids/deserialize borrowed (zero-copy)", |b| {
+        b.iter(|| {
+            let result: JsonSteroidsUserDataBorrowed = from_str(black_box(json)).unwrap();
+            black_box(result)
+        })
+    });
+
+    group.bench_function("serde_json/deserialize borrowed (zero-copy)", |b| {
+        b.iter(|| {
+            let result: SerdeUserDataBorrowed = serde_json::from_str(black_box(json)).unwrap();
+            black_box(result)
+        })
+    });
+
+    group.finish();
+
+    let serde_borrowed_data = SerdeUserDataBorrowed {
+        username: Cow::Borrowed("alice_rust"),
+        email: Cow::Borrowed("alice@example.com"),
+        full_name: Cow::Borrowed("Alice Johnson"),
+        bio: Cow::Borrowed("Rust enthusiast and open source contributor"),
+    };
+
+    let json_steroids_borrowed_data = JsonSteroidsUserDataBorrowed {
+        username: Cow::Borrowed("alice_rust"),
+        email: Cow::Borrowed("alice@example.com"),
+        full_name: Cow::Borrowed("Alice Johnson"),
+        bio: Cow::Borrowed("Rust enthusiast and open source contributor"),
+    };
+
+    let mut group = c.benchmark_group("cow_struct_serialize");
+
+    group.bench_function("json-steroids/serialize borrowed", |b| {
+        b.iter(|| to_string(black_box(&json_steroids_borrowed_data)))
+    });
+
+    group.bench_function("serde_json/serialize borrowed", |b| {
+        b.iter(|| serde_json::to_string(black_box(&serde_borrowed_data)).unwrap())
+    });
+
+    group.finish();
+}
+
+fn bench_borrowed_str_struct_comparison(c: &mut Criterion) {
+    // serde_json struct with borrowed &str fields
+    #[derive(Debug, Serialize, Deserialize)]
+    struct SerdeUserBorrowed<'a> {
+        username: &'a str,
+        email: &'a str,
+        role: &'a str,
+    }
+
+    // json-steroids struct with borrowed &str fields
+    #[derive(Debug, Json)]
+    struct JsonSteroidsUserBorrowed<'de> {
+        username: &'de str,
+        email: &'de str,
+        role: &'de str,
+    }
+
+    // JSON with simple strings (no escape sequences - optimal for zero-copy)
+    let json = r#"{"username":"john_doe","email":"john@example.com","role":"admin"}"#;
+
+    let mut group = c.benchmark_group("borrowed_str_struct_deserialize");
+    group.throughput(Throughput::Bytes(json.len() as u64));
+
+    group.bench_function("json-steroids", |b| {
+        b.iter(|| {
+            let result: JsonSteroidsUserBorrowed = from_str(black_box(json)).unwrap();
+            black_box(result)
+        })
+    });
+
+    group.bench_function("serde_json", |b| {
+        b.iter(|| {
+            let result: SerdeUserBorrowed = serde_json::from_str(black_box(json)).unwrap();
+            black_box(result)
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_serialize_simple_comparison,
@@ -442,6 +571,8 @@ criterion_group!(
     bench_deeply_nested_comparison,
     bench_many_fields_comparison,
     bench_numbers_comparison,
+    bench_cow_struct_comparison,
+    bench_borrowed_str_struct_comparison,
 );
 
 criterion_main!(benches);
